@@ -1,0 +1,7 @@
+/.idea
+/cmake-build-debug/*
+/dump
+/dump2
+/libnetfilter_queue.la
+/iptables-set
+
