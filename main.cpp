@@ -37,9 +37,14 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
     struct pkt_buff * pkBuff = pktb_alloc(AF_INET, rawData, len, 0x1000);
     THROW_IF_TRUE(pkBuff == nullptr, "Issue while pktb allocate");
     SCOPED_GUARD( pktb_free(pkBuff); ); // Don't forget to clean up
-
+//0x9f750086I4
     struct iphdr *ip = nfq_ip_get_hdr(pkBuff);
     THROW_IF_TRUE(ip == nullptr, "Issue while ipv4 header parse.");
+    //printf("sadress=%pI4\n", ip->saddr);
+    //printf("dadress=%pI4\n", ip->daddr);
+    char source[16];
+    snprintf(source, 16, "%pI4", &ip->saddr); // Mind the &!
+    //printf("%s\n", source);
 
     THROW_IF_TRUE(nfq_ip_set_transport_header(pkBuff, ip) < 0, "Can\'t set transport header.");
 
@@ -73,7 +78,27 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
             //(static_cast<char *>(payload))[payloadLen - 1 - i] = tmp;
         }
         //printf("\n");
-
+//0x9f750086I4
+//myadr 0x5634a2d3e19c
+//servadr 0x5589e4df5240I
+//servadr 0x5589e4df31a0I
+        //__be32 test = ntohl(0x5589e4df31a0);
+        //ip->daddr = test;
+        //nfq_ip_set_checksum(ip);
+        struct addr_cast {
+            union {
+                unsigned char num[4];
+                __be32 mem;
+            };
+        };
+        struct addr_cast *cst = (struct addr_cast*)malloc(sizeof(struct addr_cast));
+        cst->mem = ip->saddr;
+        unsigned char t0 = cst->num[0];
+        unsigned char t1 = cst->num[1];
+        unsigned char t2 = cst->num[2];
+        unsigned char t3 = cst->num[3];
+        //printf("%d.%d.%d.%d\n", (int)t0, (int)t1, (int)t2, (int)t3);
+        free(cst);
         nfq_tcp_compute_checksum_ipv4(tcp, ip);
         return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
     } else if (ip->protocol == IPPROTO_UDP) {
