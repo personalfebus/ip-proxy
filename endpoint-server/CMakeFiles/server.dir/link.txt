@@ -1,1 +1,1 @@
-/usr/bin/c++     CMakeFiles/server.dir/main.cpp.o  -o server  /usr/lib/x86_64-linux-gnu/libnetfilter_queue.so 
+/usr/bin/c++  -g   CMakeFiles/server.dir/main.cpp.o  -o server  /usr/lib/x86_64-linux-gnu/libnetfilter_queue.so /usr/lib/x86_64-linux-gnu/libcryptopp.so 

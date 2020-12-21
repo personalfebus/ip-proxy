@@ -21,6 +21,10 @@ extern "C"
 #include <sys/ioctl.h>
 #include <linux/if_packet.h>
 #include <cstring>
+#include <cryptopp/config.h>
+#include <cryptopp/modes.h>
+#include <cryptopp/aes.h>
+#include <cryptopp/filters.h>
 
 #define CONCAT_0(pre, post) pre ## post
 #define CONCAT_1(pre, post) CONCAT_0(pre, post)
@@ -30,7 +34,9 @@ using ScopedGuard = std::unique_ptr<void, std::function<void(void *)>>;
 #define SCOPED_GUARD_NAMED(name, code) ScopedGuard name(reinterpret_cast<void *>(-1), [&](void *) -> void {code}); (void)name
 #define SCOPED_GUARD(code) SCOPED_GUARD_NAMED(GENERATE_IDENTIFICATOR(genScopedGuard), code)
 
-int sock = socket(PF_PACKET, SOCK_RAW, 0);
+std::string secr = "thegreatsovietrevolution";
+const byte* key = (const byte*) secr.data();
+byte iv[CryptoPP::AES::BLOCKSIZE];
 
 struct addr_cast {
     union {
@@ -89,6 +95,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
         int jj = 0;
 
         bool REDIRECT = true;
+        bool is_encrypted = true;
 
         struct addr_cast *cst = (struct addr_cast*)malloc(sizeof(struct addr_cast));
         cst->mem = ip->saddr;
@@ -103,19 +110,40 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
         struct addr_cast *recst = (struct addr_cast*)malloc(sizeof(struct addr_cast));
 
         if (REDIRECT) {
-            for (unsigned int i = payloadLen - 4; i < payloadLen; i++) {
-                recst->num[i - payloadLen + 4] = user_data[i];
-                printf("%d.", user_data[i]);
-                user_data[i] = ' ';
-            }
-            ip->daddr = recst->mem;
+            if (is_encrypted) {
+            	std::string ciphertext;
+            	std::string decryptedtext;
+            	for (unsigned int i = 0; i < payloadLen; i++) {
+            		ciphertext.push_back(user_data[i]);
+            	}
+            	CryptoPP::AES::Decryption aesDecryption(key, CryptoPP::AES::DEFAULT_KEYLENGTH);
+            	CryptoPP::CBC_Mode_ExternalCipher::Decryption cbcDecryption(aesDecryption, iv);
 
-            nfq_ip_set_checksum(ip);
-            nfq_tcp_compute_checksum_ipv4(tcp, ip);
-            free(cst);
-            free(recst);
-            printf("%d\n", pktb_len(pkBuff));
-            return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
+            	CryptoPP::StreamTransformationFilter stfDecryptor(cbcDecryption, new CryptoPP::StringSink(decryptedtext));
+            	stfDecryptor.Put(reinterpret_cast<const unsigned char*>(ciphertext.c_str()), ciphertext.size());
+            	stfDecryptor.MessageEnd();
+            	for (unsigned int i = 0; i < payloadLen; i++) {
+            		if (i < decryptedtext.size()) {
+            			user_data[i] = decryptedtext[i];
+            		} else {
+            			user_data[i] = ' ';
+            		}
+            	}
+            } else {
+		    for (unsigned int i = payloadLen - 4; i < payloadLen; i++) {
+		        recst->num[i - payloadLen + 4] = user_data[i];
+		        printf("%d.", user_data[i]);
+		        user_data[i] = ' ';
+		    }
+		    ip->daddr = recst->mem;
+
+		    nfq_ip_set_checksum(ip);
+		    nfq_tcp_compute_checksum_ipv4(tcp, ip);
+		    free(cst);
+		    free(recst);
+		    printf("%d\n", pktb_len(pkBuff));
+		    return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
+	    }
         }
         nfq_ip_set_checksum(ip);
         nfq_tcp_compute_checksum_ipv4(tcp, ip);
@@ -147,7 +175,7 @@ int main()
     }
 
     int fd = nfq_fd(handler);
-
+    memset(iv, 0x00, CryptoPP::AES::BLOCKSIZE);
     std::array<char, 0x10000> buffer;
     for(;;) {
         int len = read(fd, buffer.data(), buffer.size());

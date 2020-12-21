@@ -80,6 +80,7 @@ proxy_EXTERNAL_OBJECTS =
 client/proxy: client/CMakeFiles/proxy.dir/main.cpp.o
 client/proxy: client/CMakeFiles/proxy.dir/build.make
 client/proxy: /usr/lib/x86_64-linux-gnu/libnetfilter_queue.so
+client/proxy: /usr/lib/x86_64-linux-gnu/libcryptopp.so
 client/proxy: client/CMakeFiles/proxy.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/personalfebus/ip-proxy/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable proxy"
 	cd /home/personalfebus/ip-proxy/client && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/proxy.dir/link.txt --verbose=$(VERBOSE)

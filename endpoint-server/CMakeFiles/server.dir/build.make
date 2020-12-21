@@ -80,6 +80,7 @@ server_EXTERNAL_OBJECTS =
 endpoint-server/server: endpoint-server/CMakeFiles/server.dir/main.cpp.o
 endpoint-server/server: endpoint-server/CMakeFiles/server.dir/build.make
 endpoint-server/server: /usr/lib/x86_64-linux-gnu/libnetfilter_queue.so
+endpoint-server/server: /usr/lib/x86_64-linux-gnu/libcryptopp.so
 endpoint-server/server: endpoint-server/CMakeFiles/server.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/personalfebus/ip-proxy/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable server"
 	cd /home/personalfebus/ip-proxy/endpoint-server && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/server.dir/link.txt --verbose=$(VERBOSE)

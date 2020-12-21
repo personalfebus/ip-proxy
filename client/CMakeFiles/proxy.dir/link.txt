@@ -1,1 +1,1 @@
-/usr/bin/c++     CMakeFiles/proxy.dir/main.cpp.o  -o proxy  /usr/lib/x86_64-linux-gnu/libnetfilter_queue.so 
+/usr/bin/c++  -g   CMakeFiles/proxy.dir/main.cpp.o  -o proxy  /usr/lib/x86_64-linux-gnu/libnetfilter_queue.so /usr/lib/x86_64-linux-gnu/libcryptopp.so 

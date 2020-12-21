@@ -21,6 +21,10 @@ extern "C"
 #include <sys/ioctl.h>
 #include <linux/if_packet.h>
 #include <cstring>
+#include <cryptopp/config.h>
+#include <cryptopp/modes.h>
+#include <cryptopp/aes.h>
+#include <cryptopp/filters.h>
 
 #define CONCAT_0(pre, post) pre ## post
 #define CONCAT_1(pre, post) CONCAT_0(pre, post)
@@ -30,7 +34,9 @@ using ScopedGuard = std::unique_ptr<void, std::function<void(void *)>>;
 #define SCOPED_GUARD_NAMED(name, code) ScopedGuard name(reinterpret_cast<void *>(-1), [&](void *) -> void {code}); (void)name
 #define SCOPED_GUARD(code) SCOPED_GUARD_NAMED(GENERATE_IDENTIFICATOR(genScopedGuard), code)
 
-int sock = socket(PF_PACKET, SOCK_RAW, 0);
+std::string secr = "thegreatsovietrevolution";
+const byte* key = (const byte*) secr.data();
+byte iv[CryptoPP::AES::BLOCKSIZE];
 
 struct addr_cast {
     union {
@@ -94,6 +100,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
         int jj = 0;
 
         bool REDIRECT = true;
+        bool is_encrypted = true;
 
         struct addr_cast *cst = (struct addr_cast*)malloc(sizeof(struct addr_cast));
         cst->mem = ip->daddr;
@@ -114,49 +121,109 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 
 
         if (REDIRECT) {
-            struct pkt_buff *pkBuff2 = pktb_alloc(AF_INET, rawData, len + 4, 0x1000);
-            if (pkBuff2 == nullptr) {
-            	throw std::runtime_error("Issue while pktb allocate");
-            }
-            
-            struct iphdr *ip2 = nfq_ip_get_hdr(pkBuff2);
-            if (ip2 == nullptr) {
-            	throw std::runtime_error("Issue while ipv4 header parse");
-            }
-            ip2->tot_len += 4;
-            
-            int desc2 = nfq_ip_set_transport_header(pkBuff2, ip2);
-            if (desc2 < 0) {
-            	throw std::runtime_error("Cant set transport header.");
-            }
-            
-            struct tcphdr *tcp2 = nfq_tcp_get_hdr(pkBuff2);
-            if (tcp2 == nullptr) {
-            	throw std::runtime_error("Issue while tcp header.");
-            }
-            
-            void *payload2 = nfq_tcp_get_payload(tcp2, pkBuff2);
-            unsigned int payloadLen2 = nfq_tcp_get_payload_len(tcp2, pkBuff2);
-            payloadLen2 -= 4 * tcp->th_off;
+            if (is_encrypted) {
+            	    std::string plaintext;
+            	    std::string ciphertext;
+            	    for (unsigned int i = 0; i < payloadLen; i++) {
+               	 plaintext.push_back(user_data[i]);
+            	    }
+            	    
+            	    CryptoPP::AES::Encryption aesEncryption(key, CryptoPP::AES::DEFAULT_KEYLENGTH);
+            	    CryptoPP::CBC_Mode_ExternalCipher::Encryption cbcEncryption(aesEncryption, iv);
 
-            if (payloadLen + 4 != payloadLen2){
-                printf("%d -> %d\n", payloadLen, payloadLen2);
-            }
-            
-            unsigned char *user_data2 = (unsigned char *)payload2;
-         
-            for (unsigned int i = payloadLen2 - 4; i < payloadLen2; i++) {
-                user_data2[i] = cst->num[i - payloadLen2 + 4];
-                printf("%d.", user_data2[i]);
-            }
-            ip2->daddr = recst->mem;
+                   CryptoPP::StreamTransformationFilter stfEncryptor(cbcEncryption, new CryptoPP::StringSink(ciphertext));
+                   stfEncryptor.Put( reinterpret_cast<const unsigned char*>(plaintext.c_str()), plaintext.length());
+                   stfEncryptor.MessageEnd();
+                   int cipher_resize = plaintext.size() - ciphertext.size();
+                   
+		    struct pkt_buff *pkBuff2 = pktb_alloc(AF_INET, rawData, len + cipher_resize, 0x1000);
+		    if (pkBuff2 == nullptr) {
+		    	throw std::runtime_error("Issue while pktb allocate");
+		    }
+		    
+		    struct iphdr *ip2 = nfq_ip_get_hdr(pkBuff2);
+		    if (ip2 == nullptr) {
+		    	throw std::runtime_error("Issue while ipv4 header parse");
+		    }
+		    ip2->tot_len += cipher_resize;
+		    
+		    int desc2 = nfq_ip_set_transport_header(pkBuff2, ip2);
+		    if (desc2 < 0) {
+		    	throw std::runtime_error("Cant set transport header.");
+		    }
+		    
+		    struct tcphdr *tcp2 = nfq_tcp_get_hdr(pkBuff2);
+		    if (tcp2 == nullptr) {
+		    	throw std::runtime_error("Issue while tcp header.");
+		    }
+		    
+		    void *payload2 = nfq_tcp_get_payload(tcp2, pkBuff2);
+		    unsigned int payloadLen2 = nfq_tcp_get_payload_len(tcp2, pkBuff2);
+		    payloadLen2 -= 4 * tcp->th_off;
 
-            nfq_ip_set_checksum(ip2);
-            nfq_tcp_compute_checksum_ipv4(tcp2, ip2);
-            free(cst);
-            free(recst);
-            printf("%d\n", pktb_len(pkBuff2));
-            return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff2), pktb_data(pkBuff2));
+		    if (payloadLen + cipher_resize != payloadLen2){
+		        printf("%d -> %d\n", payloadLen, payloadLen2);
+		    }
+		    
+		    unsigned char *user_data2 = (unsigned char *)payload2;
+		 
+		    for (unsigned int i = payloadLen2 - 4; i < payloadLen2; i++) {
+		        user_data2[i] = cst->num[i - payloadLen2 + 4];
+		        printf("%d.", user_data2[i]);
+		    }
+		    ip2->daddr = recst->mem;
+
+		    nfq_ip_set_checksum(ip2);
+		    nfq_tcp_compute_checksum_ipv4(tcp2, ip2);
+		    free(cst);
+		    free(recst);
+		    printf("%d\n", pktb_len(pkBuff2));
+		    return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff2), pktb_data(pkBuff2));
+            } else {
+		    struct pkt_buff *pkBuff2 = pktb_alloc(AF_INET, rawData, len + 4, 0x1000);
+		    if (pkBuff2 == nullptr) {
+		    	throw std::runtime_error("Issue while pktb allocate");
+		    }
+		    
+		    struct iphdr *ip2 = nfq_ip_get_hdr(pkBuff2);
+		    if (ip2 == nullptr) {
+		    	throw std::runtime_error("Issue while ipv4 header parse");
+		    }
+		    ip2->tot_len += 4;
+		    
+		    int desc2 = nfq_ip_set_transport_header(pkBuff2, ip2);
+		    if (desc2 < 0) {
+		    	throw std::runtime_error("Cant set transport header.");
+		    }
+		    
+		    struct tcphdr *tcp2 = nfq_tcp_get_hdr(pkBuff2);
+		    if (tcp2 == nullptr) {
+		    	throw std::runtime_error("Issue while tcp header.");
+		    }
+		    
+		    void *payload2 = nfq_tcp_get_payload(tcp2, pkBuff2);
+		    unsigned int payloadLen2 = nfq_tcp_get_payload_len(tcp2, pkBuff2);
+		    payloadLen2 -= 4 * tcp->th_off;
+
+		    if (payloadLen + 4 != payloadLen2){
+		        printf("%d -> %d\n", payloadLen, payloadLen2);
+		    }
+		    
+		    unsigned char *user_data2 = (unsigned char *)payload2;
+		 
+		    for (unsigned int i = payloadLen2 - 4; i < payloadLen2; i++) {
+		        user_data2[i] = cst->num[i - payloadLen2 + 4];
+		        printf("%d.", user_data2[i]);
+		    }
+		    ip2->daddr = recst->mem;
+
+		    nfq_ip_set_checksum(ip2);
+		    nfq_tcp_compute_checksum_ipv4(tcp2, ip2);
+		    free(cst);
+		    free(recst);
+		    printf("%d\n", pktb_len(pkBuff2));
+		    return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff2), pktb_data(pkBuff2));
+		    }
         }
         nfq_ip_set_checksum(ip);
         nfq_tcp_compute_checksum_ipv4(tcp, ip);
@@ -188,7 +255,7 @@ int main()
     }
 
     int fd = nfq_fd(handler);
-
+    memset(iv, 0x00, CryptoPP::AES::BLOCKSIZE);
     std::array<char, 0x10000> buffer;
     for(;;) {
         int len = read(fd, buffer.data(), buffer.size());

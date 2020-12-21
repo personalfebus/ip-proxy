@@ -43,4 +43,12 @@ linux/if_packet.h
 -
 cstring
 -
+cryptopp/config.h
+-
+cryptopp/modes.h
+-
+cryptopp/aes.h
+-
+cryptopp/filters.h
+-
 

@@ -6,4 +6,6 @@ add_executable(proxy main.cpp)
 
 find_library(NFQUEUE libnetfilter_queue.so)
 message(${NFQUEUE})
-target_link_libraries(proxy ${NFQUEUE})
+find_library(CRYPTO_LIB libcryptopp.so)
+message(${CRYPTO_LIB})
+target_link_libraries(proxy ${NFQUEUE} ${CRYPTO_LIB})
