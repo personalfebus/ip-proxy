@@ -22,8 +22,6 @@ extern "C"
 #include <linux/if_packet.h>
 #include <cstring>
 
-#define THROW_IF_TRUE(x, m) do { if((x)) { throw std::runtime_error(m); }} while(false)
-
 #define CONCAT_0(pre, post) pre ## post
 #define CONCAT_1(pre, post) CONCAT_0(pre, post)
 #define GENERATE_IDENTIFICATOR(pre) CONCAT_1(pre, __LINE__)
