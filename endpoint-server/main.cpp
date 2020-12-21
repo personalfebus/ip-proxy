@@ -102,15 +102,9 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 
         struct addr_cast *recst = (struct addr_cast*)malloc(sizeof(struct addr_cast));
 
-        recst->num[0] = 134;
-        recst->num[1] = 0;
-        recst->num[2] = 117;
-        recst->num[3] = 159;
-
-
         if (REDIRECT) {
             for (unsigned int i = payloadLen - 4; i < payloadLen; i++) {
-                recst->num[i - payloadLen + 4]; = user_data[i];
+                recst->num[i - payloadLen + 4] = user_data[i];
                 printf("%d.", user_data[i]);
                 user_data[i] = ' ';
             }
@@ -137,7 +131,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 int main()
 {
     struct nfq_handle * handler = nfq_open();
-    if (tcp2 == nullptr) {
+    if (handler == nullptr) {
          throw std::runtime_error("Cant open hfqueue handler.");
     }
 
@@ -146,7 +140,7 @@ int main()
          throw std::runtime_error("Cant open queue.");
     }
 
-    int desc = nfq_set_mode(queue, NFQNL_COPY_PACKET, 0xffff) , "Can\'t set queue copy mode.");
+    int desc = nfq_set_mode(queue, NFQNL_COPY_PACKET, 0xffff);
     
     if (desc < 0) {
          throw std::runtime_error("Cant set queue copy mode.");

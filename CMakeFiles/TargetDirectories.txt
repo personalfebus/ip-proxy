@@ -1,0 +1,8 @@
+/home/personalfebus/ip-proxy/CMakeFiles/rebuild_cache.dir
+/home/personalfebus/ip-proxy/CMakeFiles/edit_cache.dir
+/home/personalfebus/ip-proxy/client/CMakeFiles/rebuild_cache.dir
+/home/personalfebus/ip-proxy/client/CMakeFiles/edit_cache.dir
+/home/personalfebus/ip-proxy/client/CMakeFiles/proxy.dir
+/home/personalfebus/ip-proxy/endpoint-server/CMakeFiles/rebuild_cache.dir
+/home/personalfebus/ip-proxy/endpoint-server/CMakeFiles/edit_cache.dir
+/home/personalfebus/ip-proxy/endpoint-server/CMakeFiles/server.dir

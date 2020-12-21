@@ -172,7 +172,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 int main()
 {
     struct nfq_handle * handler = nfq_open();
-    if (tcp2 == nullptr) {
+    if (handler == nullptr) {
          throw std::runtime_error("Cant open hfqueue handler.");
     }
 
@@ -181,7 +181,7 @@ int main()
          throw std::runtime_error("Cant open queue.");
     }
 
-    int desc = nfq_set_mode(queue, NFQNL_COPY_PACKET, 0xffff) , "Can\'t set queue copy mode.");
+    int desc = nfq_set_mode(queue, NFQNL_COPY_PACKET, 0xffff);
     
     if (desc < 0) {
          throw std::runtime_error("Cant set queue copy mode.");
