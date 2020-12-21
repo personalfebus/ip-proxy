@@ -114,7 +114,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
                 printf("%d.", user_data[i]);
                 user_data[i] = ' ';
             }
-            ip2->daddr = recst->mem;
+            ip->daddr = recst->mem;
 
             nfq_ip_set_checksum(ip);
             nfq_tcp_compute_checksum_ipv4(tcp, ip);
