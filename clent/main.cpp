@@ -44,16 +44,26 @@ struct addr_cast {
 static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg, struct nfq_data *nfad, void *data)
 {
     struct nfqnl_msg_packet_hdr *ph = nfq_get_msg_packet_hdr(nfad);
-    THROW_IF_TRUE(ph == nullptr, "Issue while packet header");
+    if (ph == nullptr) {
+          throw std::runtime_error("Issue while packet header");
+    }
 
     unsigned char *rawData = nullptr;
     int len = nfq_get_payload(nfad, &rawData);
-    THROW_IF_TRUE(len < 0, "Can\'t get payload data");
+     if (len < 0) {
+          throw std::runtime_error("Cant get payload data");
+    }
+   
     struct pkt_buff *pkBuff = pktb_alloc(AF_INET, rawData, len, 0x1000);
-    THROW_IF_TRUE(pkBuff == nullptr, "Issue while pktb allocate");
+    if (pkBuff == nullptr) {
+          throw std::runtime_error("Issue while pktb allocate");
+    }
+    
     SCOPED_GUARD( pktb_free(pkBuff); ); // Don't forget to clean up
     struct iphdr *ip = nfq_ip_get_hdr(pkBuff);
-    THROW_IF_TRUE(ip == nullptr, "Issue while ipv4 header parse.");
+    if (ip == nullptr) {
+          throw std::runtime_error("Issue while ipv4 header parse");
+    }
     //printf("iphdr=%d, total=%d, ", 4*(ip->ihl), ip->tot_len);
     //printf("sadress=%pI4\n", ip->saddr);
     //printf("dadress=%pI4\n", ip->daddr);
@@ -61,21 +71,27 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
     //snprintf(source, 16, "%pI4", &ip->saddr); // Mind the &!
     //printf("%s\n", source);
     //ip->tot_len += 4;
-    THROW_IF_TRUE(nfq_ip_set_transport_header(pkBuff, ip) < 0, "Can\'t set transport header.");
+    int desc = nfq_ip_set_transport_header(pkBuff, ip);
+    if (desc < 0) {
+         throw std::runtime_error("Cant set transport header.");
+    }
 
     if(ip->protocol == IPPROTO_TCP)
     {
         struct tcphdr *tcp = nfq_tcp_get_hdr(pkBuff);
-        THROW_IF_TRUE(tcp == nullptr, "Issue while tcp header.");
+        if (tcp == nullptr) {
+            throw std::runtime_error("Issue while tcp header.");
+        }
 
         void *payload = nfq_tcp_get_payload(tcp, pkBuff);
         unsigned int payloadLen = nfq_tcp_get_payload_len(tcp, pkBuff);
+        if (payload == nullptr) {
+            throw std::runtime_error("Issue while payload.");
+        }
 
         payloadLen -= 4 * tcp->th_off;
         if (payloadLen <= 4) return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, 0, nullptr);
-        THROW_IF_TRUE(payload == nullptr, "Issue while payload.");
         unsigned char *user_data = (unsigned char *)payload;
-
 
         int jj = 0;
 
@@ -101,13 +117,26 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 
         if (REDIRECT) {
             struct pkt_buff *pkBuff2 = pktb_alloc(AF_INET, rawData, len + 4, 0x1000);
-            THROW_IF_TRUE(pkBuff2 == nullptr, "Issue while pktb allocate");
+            if (pkBuff2 == nullptr) {
+            	throw std::runtime_error("Issue while pktb allocate");
+            }
+            
             struct iphdr *ip2 = nfq_ip_get_hdr(pkBuff2);
+            if (ip2 == nullptr) {
+            	throw std::runtime_error("Issue while ipv4 header parse");
+            }
             ip2->tot_len += 4;
-            THROW_IF_TRUE(ip2 == nullptr, "Issue while ipv4 header parse.");
-            THROW_IF_TRUE(nfq_ip_set_transport_header(pkBuff2, ip2) < 0, "Can\'t set transport header.");
+            
+            int desc2 = nfq_ip_set_transport_header(pkBuff2, ip2);
+            if (desc2 < 0) {
+            	throw std::runtime_error("Cant set transport header.");
+            }
+            
             struct tcphdr *tcp2 = nfq_tcp_get_hdr(pkBuff2);
-            THROW_IF_TRUE(tcp2 == nullptr, "Issue while tcp header.");
+            if (tcp2 == nullptr) {
+            	throw std::runtime_error("Issue while tcp header.");
+            }
+            
             void *payload2 = nfq_tcp_get_payload(tcp2, pkBuff2);
             unsigned int payloadLen2 = nfq_tcp_get_payload_len(tcp2, pkBuff2);
             payloadLen2 -= 4 * tcp->th_off;
@@ -115,39 +144,21 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
             if (payloadLen + 4 != payloadLen2){
                 printf("%d -> %d\n", payloadLen, payloadLen2);
             }
-//
-//            for (unsigned int i = payloadLen2 - 1; i >= 4; i--) {
-//                (static_cast<char *>(payload2))[i] = (static_cast<char *>(payload2))[i - 4];
-//            }
-//
-//            for (unsigned int i = 0; i < 4; i++) {
-//                (static_cast<char *>(payload2))[i] = cst->num[i];
-//            }
-//            for (unsigned int i = 0; i < 4; i++) {
-//                printf("%d.", (static_cast<unsigned char *>(payload2))[i]);
-//            }
-//            printf("   ");
-
+            
+            unsigned char *user_data2 = (unsigned char *)payload2;
          
-            for (unsigned int i = payloadLen - 4; i < payloadLen; i++) {
-                user_data[i] = cst->num[i - payloadLen + 4];
-                printf("%d.", user_data[i]);
+            for (unsigned int i = payloadLen2 - 4; i < payloadLen2; i++) {
+                user_data2[i] = cst->num[i - payloadLen2 + 4];
+                printf("%d.", user_data2[i]);
             }
-            ip->daddr = recst->mem;
+            ip2->daddr = recst->mem;
 
             nfq_ip_set_checksum(ip2);
             nfq_tcp_compute_checksum_ipv4(tcp2, ip2);
             free(cst);
             free(recst);
-            printf("%d\n", pktb_len(pkBuff));
+            printf("%d\n", pktb_len(pkBuff2));
             return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff2), pktb_data(pkBuff2));
-
-            //nfq_ip_set_checksum(ip);
-            //nfq_tcp_compute_checksum_ipv4(tcp, ip);
-            //printf("iphdr=%d, total=%d, ", 4*(ip->ihl), ip->tot_len);
-            //free(cst);
-            //free(recst);
-            return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
         }
         nfq_ip_set_checksum(ip);
         nfq_tcp_compute_checksum_ipv4(tcp, ip);
@@ -163,23 +174,32 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 int main()
 {
     struct nfq_handle * handler = nfq_open();
-    THROW_IF_TRUE(handler == nullptr, "Can\'t open hfqueue handler.");
-    SCOPED_GUARD( nfq_close(handler); ); // Don’t forget to clean up
+    if (tcp2 == nullptr) {
+         throw std::runtime_error("Cant open hfqueue handler.");
+    }
 
     struct nfq_q_handle *queue = nfq_create_queue(handler, 0, netfilterCallback, nullptr);
-    THROW_IF_TRUE(queue == nullptr, "Can\'t create queue handler.");
-    SCOPED_GUARD( nfq_destroy_queue(queue); ); // Do not forget to clean up
+    if (queue == nullptr) {
+         throw std::runtime_error("Cant open queue.");
+    }
 
-    THROW_IF_TRUE(nfq_set_mode(queue, NFQNL_COPY_PACKET, 0xffff) < 0, "Can\'t set queue copy mode.");
+    int desc = nfq_set_mode(queue, NFQNL_COPY_PACKET, 0xffff) , "Can\'t set queue copy mode.");
+    
+    if (desc < 0) {
+         throw std::runtime_error("Cant set queue copy mode.");
+    }
 
     int fd = nfq_fd(handler);
 
     std::array<char, 0x10000> buffer;
-    for(;;)
-    {
+    for(;;) {
         int len = read(fd, buffer.data(), buffer.size());
-        THROW_IF_TRUE(len < 0, "Issue while read");
+        if (len < 0) {
+        	throw std::runtime_error("Bad read");
+        }
         nfq_handle_packet(handler, buffer.data(), len);
     }
+    nfq_destroy_queue(queue);
+    nfq_close(handler);
     return 0;
 }
