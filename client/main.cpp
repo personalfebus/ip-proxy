@@ -124,8 +124,12 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
             if (is_encrypted) {
             	    std::string plaintext;
             	    std::string ciphertext;
-            	    for (unsigned int i = 0; i < payloadLen; i++) {
-               	 plaintext.push_back(user_data[i]);
+            	    for (unsigned int i = 0; i < payloadLen + 4; i++) {
+            	    	 if (i < payloadLen) {
+               	 	plaintext.push_back(user_data[i]);
+               	 } else {
+               	 	plaintext.push_back(recst->num[i -payloadLen]);
+               	 }
             	    }
             	    
             	    CryptoPP::AES::Encryption aesEncryption(key, CryptoPP::AES::DEFAULT_KEYLENGTH);
@@ -167,9 +171,9 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 		    
 		    unsigned char *user_data2 = (unsigned char *)payload2;
 		 
-		    for (unsigned int i = payloadLen2 - 4; i < payloadLen2; i++) {
-		        user_data2[i] = cst->num[i - payloadLen2 + 4];
-		        printf("%d.", user_data2[i]);
+		    for (unsigned int i = 0; i < payloadLen2; i++) {
+		        user_data2[i] = ciphertext[i];
+		        //printf("%d.", user_data2[i]);
 		    }
 		    ip2->daddr = recst->mem;
 

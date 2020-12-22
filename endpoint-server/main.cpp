@@ -129,6 +129,19 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
             			user_data[i] = ' ';
             		}
             	}
+            	
+            	for (unsigned int i = decryptedtext.size() - 4; i < decryptedtext.size(); i++) {
+		        recst->num[i - decryptedtext.size() + 4] = user_data[i];
+		        printf("%d.", user_data[i]);
+		        user_data[i] = ' ';
+		}
+		ip->daddr = recst->mem;
+		nfq_ip_set_checksum(ip);
+		nfq_tcp_compute_checksum_ipv4(tcp, ip);
+		free(cst);
+		free(recst);
+		printf("%d\n", pktb_len(pkBuff));
+		return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
             } else {
 		    for (unsigned int i = payloadLen - 4; i < payloadLen; i++) {
 		        recst->num[i - payloadLen + 4] = user_data[i];
