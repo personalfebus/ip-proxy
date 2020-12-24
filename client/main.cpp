@@ -149,7 +149,6 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 		    if (ip2 == nullptr) {
 		    	throw std::runtime_error("Issue while ipv4 header parse");
 		    }
-		    ip2->tot_len += cipher_resize;
 		    
 		    int desc2 = nfq_ip_set_transport_header(pkBuff2, ip2);
 		    if (desc2 < 0) {
@@ -176,7 +175,8 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 		        //printf("%d.", user_data2[i]);
 		    }
 		    ip2->daddr = recst->mem;
-
+		    ip2->tot_len = htons(pktb_len(pkBuff2));
+		    
 		    nfq_ip_set_checksum(ip2);
 		    nfq_tcp_compute_checksum_ipv4(tcp2, ip2);
 		    free(cst);
@@ -220,7 +220,8 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 		        printf("%d.", user_data2[i]);
 		    }
 		    ip2->daddr = recst->mem;
-
+		    ip2->tot_len = htons(pktb_len(pkBuff2));
+		    
 		    nfq_ip_set_checksum(ip2);
 		    nfq_tcp_compute_checksum_ipv4(tcp2, ip2);
 		    free(cst);
