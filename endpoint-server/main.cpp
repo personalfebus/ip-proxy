@@ -37,6 +37,7 @@ using ScopedGuard = std::unique_ptr<void, std::function<void(void *)>>;
 std::string secr = "thegreatsovietrevolution";
 const byte* key = (const byte*) secr.data();
 byte iv[CryptoPP::AES::BLOCKSIZE];
+std::unordered_map<uint32_t, int> address_to_socket_tcp;
 
 struct addr_cast {
     union {
@@ -75,8 +76,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
          throw std::runtime_error("Cant set transport header.");
     }
 
-    if(ip->protocol == IPPROTO_TCP)
-    {
+    if(ip->protocol == IPPROTO_TCP) {
         struct tcphdr *tcp = nfq_tcp_get_hdr(pkBuff);
         if (tcp == nullptr) {
             throw std::runtime_error("Issue while tcp header.");
@@ -135,7 +135,55 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 		        printf("%d.", user_data[i]);
 		        user_data[i] = ' ';
 		}
+		
 		ip->daddr = recst->mem;
+		
+		int count = address_to_socket_tcp.count(ip->daddr);
+	        int s;
+	        if (count == 0) {
+	            s = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
+	            if (s == -1) {
+	                printf("Failed to create socket :(\n");
+	                exit(1);
+	            }
+
+	            struct sockaddr_in server;
+
+	            server.sin_addr.s_addr = ip2->daddr;
+	            server.sin_family = AF_INET;
+	            server.sin_port = htons(80);
+
+	            //IP_HDRINCL to tell the kernel that headers are included in the packet
+	            int one = 1;
+	            const int *val = &one;
+
+	            if (setsockopt (s, IPPROTO_IP, IP_HDRINCL, val, sizeof (one)) < 0) {
+	                perror("Error setting IP_HDRINCL");
+	                exit(0);
+	            }
+
+	            if (connect(s, (struct sockaddr *)&server, sizeof(server)) < 0) {
+	                printf("BAD\n");
+	                return 1;
+	            }
+
+	            if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {
+	                perror("sendto failed");
+	            }
+	            address_to_socket_tcp.insert(std::make_pair(ip->daddr, s));
+	        } else {
+	            auto mp = address_to_socket_tcp.find(ip->daddr);
+	            //printf("old socket = %d   %u   ", mp->first, mp->second);
+	            struct sockaddr_in server;
+
+	            server.sin_addr.s_addr = ip2->daddr;
+	            server.sin_family = AF_INET;
+	            server.sin_port = htons(80);
+	            if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {
+	                perror("sendto failed");
+	            }
+	        }
+		
 		nfq_ip_set_checksum(ip);
 		nfq_tcp_compute_checksum_ipv4(tcp, ip);
 		free(cst);
@@ -150,6 +198,52 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 		    }
 		    ip->daddr = recst->mem;
 
+		    int count = address_to_socket_tcp.count(ip->daddr);
+	            int s;
+	            if (count == 0) {
+	                s = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
+	                if (s == -1) {
+	                    printf("Failed to create socket :(\n");
+	                    exit(1);
+	                }
+
+	                struct sockaddr_in server;
+
+	                server.sin_addr.s_addr = ip2->daddr;
+	                server.sin_family = AF_INET;
+	                server.sin_port = htons(80);
+
+	                //IP_HDRINCL to tell the kernel that headers are included in the packet
+	                int one = 1;
+	                const int *val = &one;
+
+	                if (setsockopt (s, IPPROTO_IP, IP_HDRINCL, val, sizeof (one)) < 0) {
+	                    perror("Error setting IP_HDRINCL");
+	                    exit(0);
+	                }
+
+	                if (connect(s, (struct sockaddr *)&server, sizeof(server)) < 0) {
+	                    printf("BAD\n");
+	                    return 1;
+	                }
+
+	                if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {
+	                    perror("sendto failed");
+	                }
+	                address_to_socket_tcp.insert(std::make_pair(ip->daddr, s));
+	            } else {
+	                auto mp = address_to_socket_tcp.find(ip->daddr);
+	                //printf("old socket = %d   %u   ", mp->first, mp->second);
+	                struct sockaddr_in server;
+
+	                server.sin_addr.s_addr = ip2->daddr;
+	                server.sin_family = AF_INET;
+	                server.sin_port = htons(80);
+	                if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {
+	                    perror("sendto failed");
+	                }
+	            }
+	            
 		    nfq_ip_set_checksum(ip);
 		    nfq_tcp_compute_checksum_ipv4(tcp, ip);
 		    free(cst);
@@ -163,8 +257,6 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
         free(cst);
         free(recst);
         return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
-    } else if (ip->protocol == IPPROTO_UDP) {
-
     }
     return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, 0, nullptr);
 }
