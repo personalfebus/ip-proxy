@@ -8,5 +8,12 @@
 /Makefile
 /cmake_install.cmake
 /ip_proxy.cbp
+main.cpp 
+/client
+!/client/main.cpp
+!/client/CMakeLists.txt
+/endpoint-server
+!/endpoint-server/main.cpp
+!/endpoint-server/CMakeLists.txt
 
 
