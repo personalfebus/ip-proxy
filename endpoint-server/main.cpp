@@ -25,6 +25,7 @@ extern "C"
 #include <cryptopp/modes.h>
 #include <cryptopp/aes.h>
 #include <cryptopp/filters.h>
+#include <unordered_map>
 
 #define CONCAT_0(pre, post) pre ## post
 #define CONCAT_1(pre, post) CONCAT_0(pre, post)
@@ -149,7 +150,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 
 	            struct sockaddr_in server;
 
-	            server.sin_addr.s_addr = ip2->daddr;
+	            server.sin_addr.s_addr = ip->daddr;
 	            server.sin_family = AF_INET;
 	            server.sin_port = htons(80);
 
@@ -176,7 +177,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 	            //printf("old socket = %d   %u   ", mp->first, mp->second);
 	            struct sockaddr_in server;
 
-	            server.sin_addr.s_addr = ip2->daddr;
+	            server.sin_addr.s_addr = ip->daddr;
 	            server.sin_family = AF_INET;
 	            server.sin_port = htons(80);
 	            if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {
@@ -209,7 +210,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 
 	                struct sockaddr_in server;
 
-	                server.sin_addr.s_addr = ip2->daddr;
+	                server.sin_addr.s_addr = ip->daddr;
 	                server.sin_family = AF_INET;
 	                server.sin_port = htons(80);
 
@@ -236,7 +237,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 	                //printf("old socket = %d   %u   ", mp->first, mp->second);
 	                struct sockaddr_in server;
 
-	                server.sin_addr.s_addr = ip2->daddr;
+	                server.sin_addr.s_addr = ip->daddr;
 	                server.sin_family = AF_INET;
 	                server.sin_port = htons(80);
 	                if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {

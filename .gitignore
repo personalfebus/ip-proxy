@@ -2,4 +2,12 @@
 /cmake-build-debug/*
 /dump
 /dump2
+/Testing
+/Testing/*
+/CMakeFiles
+/CMakeFiles/*
+/CMakeCache.txt
+/Makefile
+/cmake_install.cmake
+/ip_proxy.cbp
 
