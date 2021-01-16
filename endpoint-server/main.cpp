@@ -27,14 +27,6 @@ extern "C"
 #include <cryptopp/filters.h>
 #include <unordered_map>
 
-#define CONCAT_0(pre, post) pre ## post
-#define CONCAT_1(pre, post) CONCAT_0(pre, post)
-#define GENERATE_IDENTIFICATOR(pre) CONCAT_1(pre, __LINE__)
-
-using ScopedGuard = std::unique_ptr<void, std::function<void(void *)>>;
-#define SCOPED_GUARD_NAMED(name, code) ScopedGuard name(reinterpret_cast<void *>(-1), [&](void *) -> void {code}); (void)name
-#define SCOPED_GUARD(code) SCOPED_GUARD_NAMED(GENERATE_IDENTIFICATOR(genScopedGuard), code)
-
 std::string secr = "thegreatsovietrevolution";
 const byte* key = (const byte*) secr.data();
 byte iv[CryptoPP::AES::BLOCKSIZE];
@@ -64,8 +56,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
     if (pkBuff == nullptr) {
           throw std::runtime_error("Issue while pktb allocate");
     }
-    
-    SCOPED_GUARD( pktb_free(pkBuff); ); // Don't forget to clean up
+
     struct iphdr *ip = nfq_ip_get_hdr(pkBuff);
     if (ip == nullptr) {
           throw std::runtime_error("Issue while ipv4 header parse");
@@ -117,6 +108,7 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
             	for (unsigned int i = 0; i < payloadLen; i++) {
             		ciphertext.push_back(user_data[i]);
             	}
+
             	CryptoPP::AES::Decryption aesDecryption(key, CryptoPP::AES::DEFAULT_KEYLENGTH);
             	CryptoPP::CBC_Mode_ExternalCipher::Decryption cbcDecryption(aesDecryption, iv);
 
@@ -132,74 +124,75 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
             	}
             	
             	for (unsigned int i = decryptedtext.size() - 4; i < decryptedtext.size(); i++) {
-		        recst->num[i - decryptedtext.size() + 4] = user_data[i];
-		        printf("%d.", user_data[i]);
-		        user_data[i] = ' ';
-		}
+                    recst->num[i - decryptedtext.size() + 4] = user_data[i];
+                    printf("%d.", user_data[i]);
+                    user_data[i] = ' ';
+		        }
 		
-		ip->daddr = recst->mem;
+		        ip->daddr = recst->mem;
 		
-		int count = address_to_socket_tcp.count(ip->daddr);
-	        int s;
-	        if (count == 0) {
-	            s = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
-	            if (s == -1) {
-	                printf("Failed to create socket :(\n");
-	                exit(1);
-	            }
+		        int count = address_to_socket_tcp.count(ip->daddr);
+                int s;
+                if (count == 0) {
+                    s = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
+                    if (s == -1) {
+                        printf("Failed to create socket :(\n");
+                        exit(1);
+                    }
 
-	            struct sockaddr_in server;
+                    struct sockaddr_in server;
 
-	            server.sin_addr.s_addr = ip->daddr;
-	            server.sin_family = AF_INET;
-	            server.sin_port = htons(80);
+                    server.sin_addr.s_addr = ip->daddr;
+                    server.sin_family = AF_INET;
+                    server.sin_port = htons(80);
 
-	            //IP_HDRINCL to tell the kernel that headers are included in the packet
-	            int one = 1;
-	            const int *val = &one;
+                    //IP_HDRINCL to tell the kernel that headers are included in the packet
+                    int one = 1;
+                    const int *val = &one;
 
-	            if (setsockopt (s, IPPROTO_IP, IP_HDRINCL, val, sizeof (one)) < 0) {
-	                perror("Error setting IP_HDRINCL");
-	                exit(0);
-	            }
+                    if (setsockopt (s, IPPROTO_IP, IP_HDRINCL, val, sizeof (one)) < 0) {
+                        perror("Error setting IP_HDRINCL");
+                        exit(0);
+                    }
 
-	            if (connect(s, (struct sockaddr *)&server, sizeof(server)) < 0) {
-	                printf("BAD\n");
-	                return 1;
-	            }
+                    if (connect(s, (struct sockaddr *)&server, sizeof(server)) < 0) {
+                        printf("BAD\n");
+                        return 1;
+                    }
 
-	            if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {
-	                perror("sendto failed");
-	            }
-	            address_to_socket_tcp.insert(std::make_pair(ip->daddr, s));
-	        } else {
-	            auto mp = address_to_socket_tcp.find(ip->daddr);
-	            //printf("old socket = %d   %u   ", mp->first, mp->second);
-	            struct sockaddr_in server;
+                    if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {
+                        perror("sendto failed");
+                    }
+                    address_to_socket_tcp.insert(std::make_pair(ip->daddr, s));
+                } else {
+                    auto mp = address_to_socket_tcp.find(ip->daddr);
+                    //printf("old socket = %d   %u   ", mp->first, mp->second);
+                    struct sockaddr_in server;
 
-	            server.sin_addr.s_addr = ip->daddr;
-	            server.sin_family = AF_INET;
-	            server.sin_port = htons(80);
-	            if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {
-	                perror("sendto failed");
-	            }
-	        }
-		
-		nfq_ip_set_checksum(ip);
-		nfq_tcp_compute_checksum_ipv4(tcp, ip);
-		free(cst);
-		free(recst);
-		printf("%d\n", pktb_len(pkBuff));
-		return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
+                    server.sin_addr.s_addr = ip->daddr;
+                    server.sin_family = AF_INET;
+                    server.sin_port = htons(80);
+                    if (sendto (s, pktb_data(pkBuff), pktb_len(pkBuff), 0, (struct sockaddr *)&server, sizeof(server)) < 0) {
+                        perror("sendto failed");
+                    }
+                }
+
+                nfq_ip_set_checksum(ip);
+                nfq_tcp_compute_checksum_ipv4(tcp, ip);
+                free(cst);
+                free(recst);
+                printf("%d\n", pktb_len(pkBuff));
+                pktb_free(pkBuff);
+                return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
             } else {
-		    for (unsigned int i = payloadLen - 4; i < payloadLen; i++) {
-		        recst->num[i - payloadLen + 4] = user_data[i];
-		        printf("%d.", user_data[i]);
-		        user_data[i] = ' ';
-		    }
-		    ip->daddr = recst->mem;
+                for (unsigned int i = payloadLen - 4; i < payloadLen; i++) {
+                    recst->num[i - payloadLen + 4] = user_data[i];
+                    printf("%d.", user_data[i]);
+                    user_data[i] = ' ';
+                }
+                ip->daddr = recst->mem;
 
-		    int count = address_to_socket_tcp.count(ip->daddr);
+                int count = address_to_socket_tcp.count(ip->daddr);
 	            int s;
 	            if (count == 0) {
 	                s = socket(PF_INET, SOCK_RAW, IPPROTO_TCP);
@@ -245,18 +238,20 @@ static int netfilterCallback(struct nfq_q_handle *queue, struct nfgenmsg *nfmsg,
 	                }
 	            }
 	            
-		    nfq_ip_set_checksum(ip);
-		    nfq_tcp_compute_checksum_ipv4(tcp, ip);
-		    free(cst);
-		    free(recst);
-		    printf("%d\n", pktb_len(pkBuff));
-		    return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
-	    }
+                nfq_ip_set_checksum(ip);
+                nfq_tcp_compute_checksum_ipv4(tcp, ip);
+                free(cst);
+                free(recst);
+                printf("%d\n", pktb_len(pkBuff));
+                pktb_free(pkBuff);
+                return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
+            }
         }
         nfq_ip_set_checksum(ip);
         nfq_tcp_compute_checksum_ipv4(tcp, ip);
         free(cst);
         free(recst);
+        pktb_free(pkBuff);
         return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, pktb_len(pkBuff), pktb_data(pkBuff));
     }
     return nfq_set_verdict(queue, ntohl(ph->packet_id), NF_ACCEPT, 0, nullptr);
