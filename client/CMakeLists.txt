@@ -1,11 +1,17 @@
 cmake_minimum_required(VERSION 3.14)
 project(proxy)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 11)
 add_executable(proxy main.cpp)
 
-find_library(NFQUEUE libnetfilter_queue.so)
-message(${NFQUEUE})
-find_library(CRYPTO_LIB libcryptopp.so)
-message(${CRYPTO_LIB})
-target_link_libraries(proxy ${NFQUEUE} ${CRYPTO_LIB})
+find_library(NETFILTER_QUEUE libnetfilter_queue.so)
+if (NOT NETFILTER_QUEUE)
+    message(FATAL_ERROR "netfilter queue library not found")
+endif ()
+
+find_library(CRYPTO_PP libcryptopp.so)
+if (NOT CRYPTO_PP)
+    message(FATAL_ERROR "crypto++ library not found")
+endif ()
+
+target_link_libraries(proxy ${NETFILTER_QUEUE} ${CRYPTO_PP})
